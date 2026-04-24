@@ -1,7 +1,10 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.5';
+const CARD_VERSION = '1.0.6';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.6: Move arc SVG inside gauge-bezel-layer for correct clipping; fix inward-only
+//         stroke by drawing arc at r - strokeWidth/2; split _renderScale into
+//         _renderScaleArc (inside bezel) and _renderScaleOverlay (in rotate group)
 // v1.0.5: Fix cgGapToArc formula — arc now correctly renders top half for gap_position:0,
 //         gap_size:180; increase default arc stroke-width to 16
 // v1.0.4: Remove import statement; add gauge-scale-layer wrapper div around SVG
@@ -324,15 +327,19 @@ class ChronoGaugeCard extends LitElement {
     }
   }
 
-  _renderScale(scale, si) {
-    const cx       = 50;
-    const cy       = 50;
-    const r        = 50 + (parseFloat(scale.position) ?? 0);
+  _renderScaleArc(scale, si) {
+    const cx          = 50;
+    const cy          = 50;
+    const strokeWidth = 16;
+    // Inward-only growth: outer edge sits at r, inner edge at r - strokeWidth.
+    // Draw path at r - strokeWidth/2 so stroke is centered there,
+    // making outer edge exactly at r.
+    const r           = (50 + (parseFloat(scale.position) ?? 0)) - strokeWidth / 2;
     const { arcStart, arcEnd } = cgGapToArc(
       parseFloat(scale.gap_position) ?? 0,
       parseFloat(scale.gap_size)     ?? 180
     );
-    const arcPath  = buildArcPath(arcStart, arcEnd, r, cx, cy);
+    const arcPath = buildArcPath(arcStart, arcEnd, r, cx, cy);
 
     return html`
       <div class="gauge-scale-layer">
@@ -341,12 +348,17 @@ class ChronoGaugeCard extends LitElement {
             d="${arcPath}"
             fill="none"
             stroke="#333333"
-            stroke-width="16"
+            stroke-width="${strokeWidth}"
             stroke-linecap="butt"
           />
         </svg>
       </div>
     `;
+  }
+
+  _renderScaleOverlay(scale, si) {
+    // Ticks and needles will be rendered here — empty for now
+    return html``;
   }
 
   render() {
@@ -381,6 +393,10 @@ class ChronoGaugeCard extends LitElement {
                 />
               ` : ''}
 
+              ${(c.scales || []).map((scale, si) =>
+                this._renderScaleArc(scale, si)
+              )}
+
               ${(c.fields || []).map((f, i) => {
                 if (!f.show) return html``;
                 return html`
@@ -403,7 +419,7 @@ class ChronoGaugeCard extends LitElement {
               ${(c.scales || []).map((scale, si) => html`
                 <div class="gauge-scale-rotate-group"
                      style="transform:rotate(${scale.arc_rotation ?? 0}deg)">
-                  ${this._renderScale(scale, si)}
+                  ${this._renderScaleOverlay(scale, si)}
                 </div>
               `)}
             </div>
