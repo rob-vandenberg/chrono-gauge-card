@@ -1,8 +1,9 @@
-
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.3.1';
+const CARD_VERSION = '1.0.4';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.4: Remove import statement; add gauge-scale-layer wrapper div around SVG
+//         matching compass-ticks-layer pattern to fix SVG rendering in rotate group
 // v1.0.3: Add arc rendering — angleToPoint, _renderScale, SVG arc path per scale
 //         inside gauge-scale-rotate-group; arc drawn at r=50 with scale.position offset
 // v1.0.2: Fix bezel-radius — set --cg-bezel-radius CSS var in setConfig; replace
@@ -332,16 +333,17 @@ class ChronoGaugeCard extends LitElement {
     const arcPath  = buildArcPath(arcStart, arcEnd, r, cx, cy);
 
     return html`
-      <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none"
-           overflow="visible">
-        <path
-          d="${arcPath}"
-          fill="none"
-          stroke="#333333"
-          stroke-width="1"
-          stroke-linecap="butt"
-        />
-      </svg>
+      <div class="gauge-scale-layer">
+        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path
+            d="${arcPath}"
+            fill="none"
+            stroke="#333333"
+            stroke-width="1"
+            stroke-linecap="butt"
+          />
+        </svg>
+      </div>
     `;
   }
 
@@ -466,7 +468,7 @@ class ChronoGaugeCard extends LitElement {
     }
 
     .gauge-layer {
-      position: relative;
+      position: absolute;
       top:    var(--cg-gauge-margin, 12%);
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
@@ -510,9 +512,17 @@ class ChronoGaugeCard extends LitElement {
       transition: transform var(--cg-animation-duration, 0.5s) ease-out;
     }
 
-    .gauge-scale-svg {
+    .gauge-scale-layer {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .gauge-scale-svg {
+      position: absolute;
       width: 100%;
       height: 100%;
       overflow: visible;
