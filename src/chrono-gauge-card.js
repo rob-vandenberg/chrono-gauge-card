@@ -1,7 +1,8 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.6';
+const CARD_VERSION = '1.0.7';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.7: Add arc_color, arc_width, arc_linecap to DEFAULT_SCALE; use in _renderScaleArc
 // v1.0.6: Move arc SVG inside gauge-bezel-layer for correct clipping; fix inward-only
 //         stroke by drawing arc at r - strokeWidth/2; split _renderScale into
 //         _renderScaleArc (inside bezel) and _renderScaleOverlay (in rotate group)
@@ -99,6 +100,9 @@ const DEFAULT_SCALE = {
   unit:             '',
   clamp_min_offset: 0,
   clamp_max_offset: 0,
+  arc_color:        '#333333',
+  arc_width:        16,
+  arc_linecap:      'butt',
   sections:         [],
   ticks:            [],
   needles:          [{ ...DEFAULT_NEEDLE }],
@@ -330,7 +334,7 @@ class ChronoGaugeCard extends LitElement {
   _renderScaleArc(scale, si) {
     const cx          = 50;
     const cy          = 50;
-    const strokeWidth = 16;
+    const strokeWidth = parseFloat(scale.arc_width) ?? 16;
     // Inward-only growth: outer edge sits at r, inner edge at r - strokeWidth.
     // Draw path at r - strokeWidth/2 so stroke is centered there,
     // making outer edge exactly at r.
@@ -347,9 +351,9 @@ class ChronoGaugeCard extends LitElement {
           <path
             d="${arcPath}"
             fill="none"
-            stroke="#333333"
+            stroke="${scale.arc_color || '#333333'}"
             stroke-width="${strokeWidth}"
-            stroke-linecap="butt"
+            stroke-linecap="${scale.arc_linecap || 'butt'}"
           />
         </svg>
       </div>

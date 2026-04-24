@@ -1,10 +1,9 @@
-
 // ─── Editor Version ───────────────────────────────────────────────────────────
-const EDITOR_VERSION = '1.0.1';
+const EDITOR_VERSION = '1.0.2';
 
 // ─── Editor Version History ───────────────────────────────────────────────────
-// v1.0.1: Initial editor — ChronoGaugeCardEditor with all sections: card, background
-//         image, header/footer, scales (sections/ticks/needles), custom fields
+// v1.0.2: Add arc_color, arc_width, arc_linecap fields to scale section
+// v1.0.1: Initial editor — ChronoGaugeCardEditor with all sections
 
 // ─── Console log ──────────────────────────────────────────────────────────────
 console.info(
@@ -372,6 +371,13 @@ class ChronoGaugeCardEditor extends LitElement {
             <div class="scale-clamp-grid">
               ${cgTextField('Clamp min offset', scale.clamp_min_offset, e => this._scaleChanged(si, 'clamp_min_offset', e), { type: 'number', step: '1', min: '0' })}
               ${cgTextField('Clamp max offset', scale.clamp_max_offset, e => this._scaleChanged(si, 'clamp_max_offset', e), { type: 'number', step: '1', min: '0' })}
+            </div>
+
+            <!-- Arc appearance -->
+            <div class="scale-arc-grid">
+              ${cgColorPicker('Arc color', scale.arc_color || '#333333', e => this._scaleChanged(si, 'arc_color', e))}
+              ${cgTextField('Arc width', scale.arc_width, e => this._scaleChanged(si, 'arc_width', e), { type: 'number', step: '1', min: '0' })}
+              ${cgButtonPicker('Linecap', scale.arc_linecap, LINECAP_OPTIONS, e => this._scaleChanged(si, 'arc_linecap', e))}
             </div>
 
             <!-- ── Sections ─────────────────────────────────────────────── -->
@@ -774,6 +780,15 @@ class ChronoGaugeCardEditor extends LitElement {
     .scale-clamp-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      align-items: end;
+    }
+
+    .scale-arc-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 2fr;
       gap: 8px;
       margin-top: 8px;
       margin-bottom: 16px;
