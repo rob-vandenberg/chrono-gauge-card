@@ -1,11 +1,12 @@
-import { LitElement, html, css } from 'https://unpkg.com/lit@2.0.0/index.js?module';
+import { LitElement, html, svg, css } from 'https://unpkg.com/lit@2.0.0/index.js?module';
 import { live } from 'https://unpkg.com/lit@2.0.0/directives/live.js?module';
 import { unsafeHTML } from 'https://unpkg.com/lit@2.0.0/directives/unsafe-html.js?module';
 
 // ─── Library Version ──────────────────────────────────────────────────────────
-const LIB_VERSION = '1.0.1';
+const LIB_VERSION = '1.0.2';
 
 // ─── Library Version History ──────────────────────────────────────────────────
+// v1.0.2: Add svg to Lit import — needed for SVG template literals in card
 // v1.0.1: Initial library — cgParseNumber, cgTextField, cgToggleField, cgColorPicker,
 //         cgButtonPicker, cgComboboxField, CgTextfield, CgButtonToggleGroup, CgCombobox
 

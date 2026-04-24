@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.7';
+const CARD_VERSION = '1.0.8';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.8: Add sections rendering — sorted arc bands per scale, each with own
+//         color, width, position; last section extends to scale_max
 // v1.0.7: Add arc_color, arc_width, arc_linecap to DEFAULT_SCALE; use in _renderScaleArc
 // v1.0.6: Move arc SVG inside gauge-bezel-layer for correct clipping; fix inward-only
 //         stroke by drawing arc at r - strokeWidth/2; split _renderScale into
@@ -360,6 +362,56 @@ class ChronoGaugeCard extends LitElement {
     `;
   }
 
+  _renderScaleSections(scale, si) {
+    const sections = (scale.sections || []);
+    if (sections.length === 0) return html``;
+
+    const cx       = 50;
+    const cy       = 50;
+    const scaleMin = parseFloat(scale.scale_min) ?? 0;
+    const scaleMax = parseFloat(scale.scale_max) ?? 100;
+    const { arcStart, arcEnd } = cgGapToArc(
+      parseFloat(scale.gap_position) ?? 0,
+      parseFloat(scale.gap_size)     ?? 180
+    );
+
+    // Sort sections by value ascending
+    const sorted = [...sections].sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
+
+    const paths = sorted.map((sec, i) => {
+      const secStart  = parseFloat(sec.value);
+      const secEnd    = i < sorted.length - 1
+        ? parseFloat(sorted[i + 1].value)
+        : scaleMax;
+
+      const angleStart = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
+      const angleEnd   = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+
+      const strokeWidth = parseFloat(sec.width)    ?? 16;
+      const position    = parseFloat(sec.position) ?? 0;
+      const r           = (50 + position) - strokeWidth / 2;
+      const arcPath     = buildArcPath(angleStart, angleEnd, r, cx, cy);
+
+      return { arcPath, strokeWidth, color: sec.color_start || '#ffffff', linecap: sec.linecap || 'butt' };
+    });
+
+    return html`
+      <div class="gauge-scale-layer">
+        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          ${paths.map(p => svg`
+            <path
+              d="${p.arcPath}"
+              fill="none"
+              stroke="${p.color}"
+              stroke-width="${p.strokeWidth}"
+              stroke-linecap="${p.linecap}"
+            />
+          `)}
+        </svg>
+      </div>
+    `;
+  }
+
   _renderScaleOverlay(scale, si) {
     // Ticks and needles will be rendered here — empty for now
     return html``;
@@ -399,6 +451,10 @@ class ChronoGaugeCard extends LitElement {
 
               ${(c.scales || []).map((scale, si) =>
                 this._renderScaleArc(scale, si)
+              )}
+
+              ${(c.scales || []).map((scale, si) =>
+                this._renderScaleSections(scale, si)
               )}
 
               ${(c.fields || []).map((f, i) => {
