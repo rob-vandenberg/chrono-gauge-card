@@ -1,0 +1,10 @@
+{
+  "name": "chrono-gauge-card",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cat src/chrono-gauge-lib.js src/chrono-gauge-editor.js src/chrono-gauge-card.js | terser -o dist/chrono-gauge-card.js --compress --mangle"
+  },
+  "devDependencies": {
+    "terser": "^5.0.0"
+  }
+}
