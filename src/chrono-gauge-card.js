@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.4';
+const CARD_VERSION = '1.0.4.1';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.4: Remove import statement; add gauge-scale-layer wrapper div around SVG
@@ -473,12 +473,12 @@ class ChronoGaugeCard extends LitElement {
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
       bottom: var(--cg-gauge-margin, 12%);
-      container-type: inline-size;
       overflow: visible;
     }
 
     .gauge-bezel-layer {
       position: absolute;
+      container-type: inline-size;
       top: 0; left: 0; right: 0; bottom: 0;
       border-radius: var(--cg-bezel-radius, 50%);
       background-color: var(--cg-background-color, #1a1a1a);
