@@ -1,6 +1,6 @@
 
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.3';
+const CARD_VERSION = '1.0.3.1';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.3: Add arc rendering — angleToPoint, _renderScale, SVG arc path per scale
@@ -466,7 +466,7 @@ class ChronoGaugeCard extends LitElement {
     }
 
     .gauge-layer {
-      position: absolute;
+      position: relative;
       top:    var(--cg-gauge-margin, 12%);
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
