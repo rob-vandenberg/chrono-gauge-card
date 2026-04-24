@@ -1,8 +1,10 @@
 
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.2';
+const CARD_VERSION = '1.0.3';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.3: Add arc rendering — angleToPoint, _renderScale, SVG arc path per scale
+//         inside gauge-scale-rotate-group; arc drawn at r=50 with scale.position offset
 // v1.0.2: Fix bezel-radius — set --cg-bezel-radius CSS var in setConfig; replace
 //         invalid css` interpolation with var(--cg-bezel-radius, 50%)
 // v1.0.1: Initial card shell — constants, defaults, setConfig, lifecycle, render,
@@ -147,6 +149,28 @@ function valueToAngle(value, scaleMin, scaleMax, arcStart, arcEnd) {
   const arcSpan = ((arcEnd - arcStart) + 360) % 360;
   const ratio   = (value - scaleMin) / (scaleMax - scaleMin);
   return arcStart + ratio * arcSpan;
+}
+
+// ─── angleToPoint ─────────────────────────────────────────────────────────────
+// Converts a compass angle (0=north, clockwise) to an SVG point on a circle.
+// cx, cy: center of circle. r: radius. All in 100×100 coordinate space.
+function angleToPoint(angleDeg, r, cx, cy) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return {
+    x: cx + r * Math.cos(rad),
+    y: cy + r * Math.sin(rad),
+  };
+}
+
+// ─── buildArcPath ─────────────────────────────────────────────────────────────
+// Builds an SVG arc path string from arcStart to arcEnd (compass degrees).
+// r: radius. cx, cy: center. All in 100×100 coordinate space.
+function buildArcPath(arcStart, arcEnd, r, cx, cy) {
+  const arcSpan  = ((arcEnd - arcStart) + 360) % 360;
+  const start    = angleToPoint(arcStart, r, cx, cy);
+  const end      = angleToPoint(arcEnd,   r, cx, cy);
+  const largeArc = arcSpan > 180 ? 1 : 0;
+  return `M ${start.x},${start.y} A ${r},${r} 0 ${largeArc} 1 ${end.x},${end.y}`;
 }
 
 // ─── Main Card ────────────────────────────────────────────────────────────────
@@ -297,6 +321,30 @@ class ChronoGaugeCard extends LitElement {
     }
   }
 
+  _renderScale(scale, si) {
+    const cx       = 50;
+    const cy       = 50;
+    const r        = 50 + (parseFloat(scale.position) ?? 0);
+    const { arcStart, arcEnd } = cgGapToArc(
+      parseFloat(scale.gap_position) ?? 0,
+      parseFloat(scale.gap_size)     ?? 180
+    );
+    const arcPath  = buildArcPath(arcStart, arcEnd, r, cx, cy);
+
+    return html`
+      <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none"
+           overflow="visible">
+        <path
+          d="${arcPath}"
+          fill="none"
+          stroke="#333333"
+          stroke-width="1"
+          stroke-linecap="butt"
+        />
+      </svg>
+    `;
+  }
+
   render() {
     const c = this.config || {};
 
@@ -351,6 +399,7 @@ class ChronoGaugeCard extends LitElement {
               ${(c.scales || []).map((scale, si) => html`
                 <div class="gauge-scale-rotate-group"
                      style="transform:rotate(${scale.arc_rotation ?? 0}deg)">
+                  ${this._renderScale(scale, si)}
                 </div>
               `)}
             </div>
@@ -459,6 +508,14 @@ class ChronoGaugeCard extends LitElement {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       transition: transform var(--cg-animation-duration, 0.5s) ease-out;
+    }
+
+    .gauge-scale-svg {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
     }
 
     .field {
