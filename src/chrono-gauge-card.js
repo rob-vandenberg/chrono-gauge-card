@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.4.1';
+const CARD_VERSION = '1.0.5';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.5: Fix cgGapToArc formula — arc now correctly renders top half for gap_position:0,
+//         gap_size:180; increase default arc stroke-width to 16
 // v1.0.4: Remove import statement; add gauge-scale-layer wrapper div around SVG
 //         matching compass-ticks-layer pattern to fix SVG rendering in rotate group
 // v1.0.3: Add arc rendering — angleToPoint, _renderScale, SVG arc path per scale
@@ -137,8 +139,8 @@ const DEFAULT_CONFIG = {
 // Returns { arcStart, arcEnd } in compass degrees (0 = north, clockwise).
 function cgGapToArc(gap_position, gap_size) {
   const halfGap  = gap_size / 2;
-  const arcStart = ((180 + gap_position - halfGap) + 360) % 360;
-  const arcEnd   = ((180 + gap_position + halfGap) + 360) % 360;
+  const arcStart = ((180 + gap_position + halfGap) + 360) % 360;
+  const arcEnd   = ((180 + gap_position - halfGap) + 360) % 360;
   return { arcStart, arcEnd };
 }
 
@@ -339,7 +341,7 @@ class ChronoGaugeCard extends LitElement {
             d="${arcPath}"
             fill="none"
             stroke="#333333"
-            stroke-width="1"
+            stroke-width="16"
             stroke-linecap="butt"
           />
         </svg>
@@ -473,12 +475,12 @@ class ChronoGaugeCard extends LitElement {
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
       bottom: var(--cg-gauge-margin, 12%);
+      container-type: inline-size;
       overflow: visible;
     }
 
     .gauge-bezel-layer {
       position: absolute;
-      container-type: inline-size;
       top: 0; left: 0; right: 0; bottom: 0;
       border-radius: var(--cg-bezel-radius, 50%);
       background-color: var(--cg-background-color, #1a1a1a);
