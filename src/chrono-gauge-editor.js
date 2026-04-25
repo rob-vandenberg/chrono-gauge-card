@@ -1,7 +1,8 @@
 // ─── Editor Version ───────────────────────────────────────────────────────────
-const EDITOR_VERSION = '1.0.2';
+const EDITOR_VERSION = '1.0.3';
 
 // ─── Editor Version History ───────────────────────────────────────────────────
+// v1.0.3: Add exclusive toggle to tick tier editor
 // v1.0.2: Add arc_color, arc_width, arc_linecap fields to scale section
 // v1.0.1: Initial editor — ChronoGaugeCardEditor with all sections
 
@@ -419,6 +420,7 @@ class ChronoGaugeCardEditor extends LitElement {
 
                   <div class="tick-type-grid">
                     ${cgToggleField('Show', tick.show, e => this._tickChanged(si, ti, 'show', e))}
+                    ${cgToggleField('Exclusive', tick.exclusive, e => this._tickChanged(si, ti, 'exclusive', e))}
                     ${cgComboboxField('Type', tick.type, TICK_TYPE_OPTIONS, e => this._tickChanged(si, ti, 'type', e))}
                   </div>
 
@@ -823,7 +825,7 @@ class ChronoGaugeCardEditor extends LitElement {
     /* ── Tick sub-panel grids ──────────────────────────────────────────────── */
     .tick-type-grid {
       display: grid;
-      grid-template-columns: 1fr 2fr;
+      grid-template-columns: 1fr 1fr 2fr;
       gap: 8px;
       margin-top: 16px;
       margin-bottom: 8px;

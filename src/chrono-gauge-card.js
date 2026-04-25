@@ -1,8 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.21';
+const CARD_VERSION = '1.0.22';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
-// v1.0.21: Fix geometry — remove aspect-ratio from gauge-container, add to gauge-layer
+// v1.0.22: Add tick rendering — line and number types, exclusive collision logic, per-scale
+// v1.0.21: Fix geometry — remove aspect-ratio from gauge-container, add to gauge-layer (reverted in v1.0.22)
 // v1.0.20: Expand foreignObject to gauge-layer + GAUGE_DEFAULT_MARGIN so gradient covers full card area
 // v1.0.19: Remove container-type:inline-size from gauge-layer — was clipping sections at gauge-layer boundary
 // v1.0.18: Fix section gradient rendering — correct cssStart angle and clipPath on foreignObject
@@ -59,17 +60,18 @@ const DEFAULT_SECTION = {
 
 // ─── Default Tick ─────────────────────────────────────────────────────────────
 const DEFAULT_TICK = {
-  show:      true,
-  type:      'line',
-  divisions: 10,
-  length:    3,
-  width:     1.5,
-  position:  0,
-  color:     '#AAAAAA',
-  linecap:   'butt',
-  font_size: 10,
+  show:        true,
+  type:        'line',
+  divisions:   10,
+  length:      3,
+  width:       1.5,
+  position:    0,
+  color:       '#AAAAAA',
+  linecap:     'butt',
+  font_size:   10,
   font_weight: 400,
-  font_color: '#AAAAAA',
+  font_color:  '#AAAAAA',
+  exclusive:   true,
 };
 
 // ─── Default Needle ───────────────────────────────────────────────────────────
@@ -490,6 +492,89 @@ class ChronoGaugeCard extends LitElement {
     `;
   }
 
+  _renderScaleTicks(scale, si) {
+    const tiers = scale.ticks || [];
+    if (tiers.length === 0) return html``;
+
+    const cx       = 50;
+    const cy       = 50;
+    const r        = 50;
+    const scaleMin = parseFloat(scale.scale_min) || 0;
+    const scaleMax = parseFloat(scale.scale_max) || 100;
+    const { arcStart, arcEnd } = cgGapToArc(
+      parseFloat(scale.gap_position) || 0,
+      parseFloat(scale.gap_size)     || 180
+    );
+
+    const round4   = (v) => Math.round(v * 10000) / 10000;
+    const occupied = new Set();
+    const items    = [];
+
+    tiers.forEach((tier) => {
+      if (!tier.show) return;
+
+      const divisions  = parseInt(tier.divisions) || 1;
+      const exclusive  = tier.exclusive !== false;
+      const type       = tier.type || 'line';
+      const position   = parseFloat(tier.position) || 0;
+
+      for (let i = 0; i <= divisions; i++) {
+        const value    = scaleMin + (i / divisions) * (scaleMax - scaleMin);
+        const angleDeg = round4(valueToAngle(value, scaleMin, scaleMax, arcStart, arcEnd));
+
+        if (occupied.has(angleDeg)) continue;
+        if (exclusive) occupied.add(angleDeg);
+
+        const angleRad = (angleDeg - 90) * Math.PI / 180;
+        const sinA     = Math.cos(angleRad);
+        const cosA     = Math.sin(angleRad);
+
+        if (type === 'line') {
+          const length = Math.max(parseFloat(tier.length), 0.001);
+          const x1 = cx + (r + position)          * sinA;
+          const y1 = cy + (r + position)          * cosA;
+          const x2 = cx + (r + position - length) * sinA;
+          const y2 = cy + (r + position - length) * cosA;
+          items.push(svg`
+            <line
+              x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+              stroke="${tier.color || '#AAAAAA'}"
+              stroke-width="${parseFloat(tier.width) || 1.5}"
+              stroke-linecap="${tier.linecap || 'butt'}"
+            />
+          `);
+        } else if (type === 'number') {
+          const fontSize   = parseFloat(tier.font_size)   || 10;
+          const fontWeight = parseFloat(tier.font_weight) || 400;
+          const fontColor  = tier.font_color || '#AAAAAA';
+          const tx = cx + (r + position) * sinA;
+          const ty = cy + (r + position) * cosA;
+          const label = Number.isInteger(value) ? value : parseFloat(value.toFixed(2));
+          items.push(svg`
+            <text
+              x="${tx}" y="${ty}"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              font-size="${fontSize}"
+              font-weight="${fontWeight}"
+              fill="${fontColor}"
+            >${label}</text>
+          `);
+        }
+      }
+    });
+
+    if (items.length === 0) return html``;
+
+    return html`
+      <div class="gauge-scale-layer">
+        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none" overflow="visible">
+          ${items}
+        </svg>
+      </div>
+    `;
+  }
+
   _buildNeedlePath(morph, curve, invert, position, width, height) {
     const hw = width / 2;
     let points = [
@@ -646,6 +731,7 @@ class ChronoGaugeCard extends LitElement {
             ${(c.scales || []).map((scale, si) => html`
               ${this._renderScaleArc(scale, si)}
               ${this._renderScaleSections(scale, si)}
+              ${this._renderScaleTicks(scale, si)}
             `)}
 
             <div class="gauge-global-rotate-group"
@@ -712,6 +798,7 @@ class ChronoGaugeCard extends LitElement {
     .gauge-container {
       position: relative;
       width: 100%;
+      aspect-ratio: 1 / 1;
       margin: 0 auto;
       overflow: hidden;
       box-sizing: border-box;
@@ -724,7 +811,6 @@ class ChronoGaugeCard extends LitElement {
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
       bottom: var(--cg-gauge-margin, 12%);
-      aspect-ratio: 1 / 1;
       overflow: visible;
     }
 
