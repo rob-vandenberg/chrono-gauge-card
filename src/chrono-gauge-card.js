@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.12';
+const CARD_VERSION = '1.0.12.1';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
@@ -768,6 +768,7 @@ class ChronoGaugeCard extends LitElement {
       position: absolute;
       width: 100%;
       height: 100%;
+      overflow: visible;
     }
 
     .gauge-needle-layer {
