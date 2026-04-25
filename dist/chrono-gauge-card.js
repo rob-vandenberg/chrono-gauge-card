@@ -1416,12 +1416,13 @@ class ChronoGaugeCardEditor extends LitElement {
 
 customElements.define('chrono-gauge-card-editor', ChronoGaugeCardEditor);
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.15';
+const CARD_VERSION = '1.0.16';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
-// v1.0.15: Replace canvas sections with SVG clipPath + foreignObject + CSS conic-gradient —
-//          stays in SVG, true arc gradient, no canvas needed
-// v1.0.14: Move section canvases to gauge-container as direct siblings of gauge-layer
+// v1.0.16: Fix clipPath using filled ring segment path; full-container foreignObject
+//          centered on gauge; solid color optimization when color_start===color_end;
+//          per-section gradient with correct angle color stops
+// v1.0.15: Replace canvas sections with SVG clipPath + foreignObject + CSS conic-gradient
 // v1.0.13: Size canvas to gauge-container to allow sections to extend beyond gauge-layer;
 //          center canvas over gauge-layer center; gauge-scale-layer overflow:visible
 // v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
@@ -1613,6 +1614,21 @@ function buildArcPath(arcStart, arcEnd, r, cx, cy) {
   const end      = angleToPoint(arcEnd,   r, cx, cy);
   const largeArc = arcSpan > 180 ? 1 : 0;
   return `M ${start.x},${start.y} A ${r},${r} 0 ${largeArc} 1 ${end.x},${end.y}`;
+}
+
+// ─── buildRingPath ────────────────────────────────────────────────────────────
+// Builds a filled ring segment path — the area between outer radius rOuter and
+// inner radius rInner, from arcStart to arcEnd (compass degrees).
+// Used as clipPath geometry for section gradients.
+function buildRingPath(arcStart, arcEnd, rOuter, rInner, cx, cy) {
+  const arcSpan    = ((arcEnd - arcStart) + 360) % 360;
+  const largeArc   = arcSpan > 180 ? 1 : 0;
+  const p1         = angleToPoint(arcStart, rOuter, cx, cy);
+  const p2         = angleToPoint(arcEnd,   rOuter, cx, cy);
+  const p3         = angleToPoint(arcEnd,   rInner, cx, cy);
+  const p4         = angleToPoint(arcStart, rInner, cx, cy);
+  // Outer arc forward, line to inner, inner arc backward, close
+  return `M ${p1.x},${p1.y} A ${rOuter},${rOuter} 0 ${largeArc} 1 ${p2.x},${p2.y} L ${p3.x},${p3.y} A ${rInner},${rInner} 0 ${largeArc} 0 ${p4.x},${p4.y} Z`;
 }
 
 // ─── Main Card ────────────────────────────────────────────────────────────────
@@ -1834,18 +1850,13 @@ class ChronoGaugeCard extends LitElement {
               const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
               const strokeWidth = parseFloat(sec.width)    || 16;
               const position    = parseFloat(sec.position) || 0;
-              const r           = (50 + position) - strokeWidth / 2;
-              const arcPath     = buildArcPath(angleStart, angleEnd, r, cx, cy);
+              const rOuter      = 50 + position;
+              const rInner      = rOuter - strokeWidth;
+              const ringPath    = buildRingPath(angleStart, angleEnd, rOuter, rInner, cx, cy);
               const clipId      = `section-clip-${si}-${i}`;
               return svg`
                 <clipPath id="${clipId}" clipPathUnits="userSpaceOnUse">
-                  <path
-                    d="${arcPath}"
-                    fill="none"
-                    stroke="white"
-                    stroke-width="${strokeWidth}"
-                    stroke-linecap="${sec.linecap || 'butt'}"
-                  />
+                  <path d="${ringPath}" />
                 </clipPath>
               `;
             })}
@@ -1858,20 +1869,31 @@ class ChronoGaugeCard extends LitElement {
               : scaleMax;
             const angleStart  = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
             const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+            const strokeWidth = parseFloat(sec.width)    || 16;
+            const position    = parseFloat(sec.position) || 0;
             const clipId      = `section-clip-${si}-${i}`;
+            const colorStart  = sec.color_start || '#ffffff';
+            const colorEnd    = sec.color_end   || colorStart;
 
-            // CSS conic-gradient: starts from north (-90deg in CSS = 0° compass).
-            // angleStart and angleEnd are compass degrees — convert to CSS degrees
-            // by subtracting 90.
-            const cssStart    = angleStart - 90;
-            const cssEnd      = angleEnd   - 90;
+            // Solid color optimization — no gradient needed
+            if (colorStart === colorEnd) {
+              const rOuter  = 50 + position;
+              const rInner  = rOuter - strokeWidth;
+              const ringPath = buildRingPath(angleStart, angleEnd, rOuter, rInner, cx, cy);
+              return svg`<path d="${ringPath}" fill="${colorStart}" />`;
+            }
+
+            // Gradient — conic-gradient covers full 100×100 space centered at gauge center.
+            // Color stops use CSS degrees: compass → CSS = compassDeg - 90
+            const cssStart = angleStart - 90;
+            const cssSpan  = ((angleEnd - angleStart) + 360) % 360;
 
             return svg`
               <g clip-path="url(#${clipId})">
                 <foreignObject x="0" y="0" width="100" height="100">
                   <div
                     xmlns="http://www.w3.org/1999/xhtml"
-                    style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${sec.color_start || '#ffffff'} 0deg, ${sec.color_end || sec.color_start || '#ffffff'} ${cssEnd - cssStart}deg);"
+                    style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${colorStart} 0deg, ${colorEnd} ${cssSpan}deg, transparent ${cssSpan}deg);"
                   ></div>
                 </foreignObject>
               </g>
