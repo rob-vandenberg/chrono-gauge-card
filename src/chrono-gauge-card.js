@@ -1,10 +1,8 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.16';
+const CARD_VERSION = '1.0.16.1';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.16: Fix clipPath using filled ring segment path; full-container foreignObject
-//          centered on gauge; solid color optimization when color_start===color_end;
-//          per-section gradient with correct angle color stops
 // v1.0.15: Replace canvas sections with SVG clipPath + foreignObject + CSS conic-gradient
 // v1.0.13: Size canvas to gauge-container to allow sections to extend beyond gauge-layer;
 //          center canvas over gauge-layer center; gauge-scale-layer overflow:visible
@@ -466,20 +464,17 @@ class ChronoGaugeCard extends LitElement {
               return svg`<path d="${ringPath}" fill="${colorStart}" />`;
             }
 
-            // Gradient — conic-gradient covers full 100×100 space centered at gauge center.
-            // Color stops use CSS degrees: compass → CSS = compassDeg - 90
+            // Gradient — full foreignObject, no clip for testing
             const cssStart = angleStart - 90;
             const cssSpan  = ((angleEnd - angleStart) + 360) % 360;
 
             return svg`
-              <g clip-path="url(#${clipId})">
-                <foreignObject x="0" y="0" width="100" height="100">
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${colorStart} 0deg, ${colorEnd} ${cssSpan}deg, transparent ${cssSpan}deg);"
-                  ></div>
-                </foreignObject>
-              </g>
+              <foreignObject x="0" y="0" width="100" height="100">
+                <div
+                  xmlns="http://www.w3.org/1999/xhtml"
+                  style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${colorStart} 0deg, ${colorEnd} ${cssSpan}deg, transparent ${cssSpan}deg);"
+                ></div>
+              </foreignObject>
             `;
           })}
         </svg>
