@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.16.1';
+const CARD_VERSION = '1.0.16.2';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.16: Fix clipPath using filled ring segment path; full-container foreignObject
@@ -420,7 +420,7 @@ class ChronoGaugeCard extends LitElement {
 
     return html`
       <div class="gauge-scale-layer">
-        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none" overflow="visible">
           <defs>
             ${sorted.map((sec, i) => {
               const secStart    = parseFloat(sec.value);
