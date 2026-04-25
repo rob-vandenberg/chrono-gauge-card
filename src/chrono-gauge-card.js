@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.10';
+const CARD_VERSION = '1.0.11';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.11: Move arc sections SVG out of gauge-bezel-layer to sibling position —
+//          sections now render freely outside circle; overflow:hidden stays on bezel
 // v1.0.10: Deep-merge scales/needles/sections/ticks/fields with defaults in setConfig
 //          — fixes NaN angles caused by missing properties not in user YAML
 // v1.0.9: Add needle rendering — _buildNeedlePath, _renderScaleOverlay with per-needle
@@ -565,14 +567,6 @@ class ChronoGaugeCard extends LitElement {
                 />
               ` : ''}
 
-              ${(c.scales || []).map((scale, si) =>
-                this._renderScaleArc(scale, si)
-              )}
-
-              ${(c.scales || []).map((scale, si) =>
-                this._renderScaleSections(scale, si)
-              )}
-
               ${(c.fields || []).map((f, i) => {
                 if (!f.show) return html``;
                 return html`
@@ -589,6 +583,11 @@ class ChronoGaugeCard extends LitElement {
                 `;
               })}
             </div>
+
+            ${(c.scales || []).map((scale, si) => html`
+              ${this._renderScaleArc(scale, si)}
+              ${this._renderScaleSections(scale, si)}
+            `)}
 
             <div class="gauge-global-rotate-group"
                  style="transform:rotate(${c.arc_rotation}deg)">
