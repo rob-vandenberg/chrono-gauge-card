@@ -1,7 +1,8 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.19';
+const CARD_VERSION = '1.0.20';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.20: Expand foreignObject to gauge-layer + GAUGE_DEFAULT_MARGIN so gradient covers full card area
 // v1.0.19: Remove container-type:inline-size from gauge-layer — was clipping sections at gauge-layer boundary
 // v1.0.18: Fix section gradient rendering — correct cssStart angle and clipPath on foreignObject
 // v1.0.17: Fix section gradient angles — broke gradient rendering (do not use)
@@ -467,14 +468,18 @@ class ChronoGaugeCard extends LitElement {
               return svg`<path d="${ringPath}" fill="${colorStart}" />`;
             }
 
-            // Gradient — clip to ring segment; cssStart needs no compass→CSS offset
-            const cssStart = angleStart;
-            const cssSpan  = ((angleEnd - angleStart) + 360) % 360;
+            // Gradient — foreignObject expanded by GAUGE_DEFAULT_MARGIN on all sides so gradient
+            // covers the full card area; gradient center adjusted to match gauge center (50,50)
+            const cssStart  = angleStart;
+            const cssSpan   = ((angleEnd - angleStart) + 360) % 360;
+            const m         = GAUGE_DEFAULT_MARGIN;
+            const foSize    = 100 + m * 2;
+            const centerPct = ((50 + m) / foSize * 100).toFixed(4);
             return svg`
-              <foreignObject x="0" y="0" width="100" height="100" clip-path="url(#${clipId})">
+              <foreignObject x="${-m}" y="${-m}" width="${foSize}" height="${foSize}" clip-path="url(#${clipId})">
                 <div
                   xmlns="http://www.w3.org/1999/xhtml"
-                  style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${colorStart} 0deg, ${colorEnd} ${cssSpan}deg, transparent ${cssSpan}deg);"
+                  style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at ${centerPct}% ${centerPct}%, ${colorStart} 0deg, ${colorEnd} ${cssSpan}deg, transparent ${cssSpan}deg);"
                 ></div>
               </foreignObject>
             `;
