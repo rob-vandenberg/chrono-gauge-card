@@ -1,7 +1,8 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.20';
+const CARD_VERSION = '1.0.21';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.21: Fix geometry — remove aspect-ratio from gauge-container, add to gauge-layer
 // v1.0.20: Expand foreignObject to gauge-layer + GAUGE_DEFAULT_MARGIN so gradient covers full card area
 // v1.0.19: Remove container-type:inline-size from gauge-layer — was clipping sections at gauge-layer boundary
 // v1.0.18: Fix section gradient rendering — correct cssStart angle and clipPath on foreignObject
@@ -711,7 +712,6 @@ class ChronoGaugeCard extends LitElement {
     .gauge-container {
       position: relative;
       width: 100%;
-      aspect-ratio: 1 / 1;
       margin: 0 auto;
       overflow: hidden;
       box-sizing: border-box;
@@ -724,6 +724,7 @@ class ChronoGaugeCard extends LitElement {
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
       bottom: var(--cg-gauge-margin, 12%);
+      aspect-ratio: 1 / 1;
       overflow: visible;
     }
 
