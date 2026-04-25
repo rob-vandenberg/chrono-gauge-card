@@ -1,9 +1,10 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.14';
+const CARD_VERSION = '1.0.15';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
-// v1.0.14: Move section canvases to gauge-container as direct siblings of gauge-layer —
-//          no offset needed, canvas naturally covers full container
+// v1.0.15: Replace canvas sections with SVG clipPath + foreignObject + CSS conic-gradient —
+//          stays in SVG, true arc gradient, no canvas needed
+// v1.0.14: Move section canvases to gauge-container as direct siblings of gauge-layer
 // v1.0.13: Size canvas to gauge-container to allow sections to extend beyond gauge-layer;
 //          center canvas over gauge-layer center; gauge-scale-layer overflow:visible
 // v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
@@ -260,9 +261,6 @@ class ChronoGaugeCard extends LitElement {
     if (this._hass && !this._subscriptionsActive) {
       this._setupSubscriptions();
     }
-
-    // Redraw canvas sections after DOM updates
-    this.updateComplete.then(() => this._drawAllSections());
   }
 
   get config() {
@@ -391,52 +389,8 @@ class ChronoGaugeCard extends LitElement {
   }
 
   _renderScaleSections(scale, si) {
-    // Canvas is rendered as a direct child of gauge-container (sibling of gauge-layer)
-    // so it naturally covers the full container with no offset needed.
-    return html`
-      <canvas class="gauge-sections-canvas" id="gauge-sections-canvas-${si}"></canvas>
-    `;
-  }
-
-  _drawAllSections() {
-    const c = this.config;
-    if (!c) return;
-    (c.scales || []).forEach((scale, si) => {
-      const canvas = this.shadowRoot?.querySelector(`#gauge-sections-canvas-${si}`);
-      if (canvas) this._drawScaleSections(canvas, scale);
-    });
-  }
-
-  _drawScaleSections(canvas, scale) {
     const sections = scale.sections || [];
-    if (sections.length === 0) return;
-
-    // Size canvas to gauge-container so sections can render beyond gauge-layer bounds.
-    // gauge-container is overflow:hidden — the only intended clip boundary.
-    const container = this.shadowRoot?.querySelector('.gauge-container');
-    if (!container) return;
-    const containerSize = container.offsetWidth;
-    if (!containerSize) return;
-
-    canvas.width  = containerSize;
-    canvas.height = containerSize;
-
-    // gauge-layer is inset by --cg-gauge-margin on all sides.
-    // The canvas covers the full container, so we must offset the drawing origin
-    // to align the 100×100 coordinate space center with the gauge-layer center.
-    const gaugeLayer = this.shadowRoot?.querySelector('.gauge-layer');
-    if (!gaugeLayer) return;
-    const layerSize   = gaugeLayer.offsetWidth;
-    const layerOffset = (containerSize - layerSize) / 2;
-
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, containerSize, containerSize);
-
-    // Translate to gauge-layer origin, then scale to 100×100 coordinate space
-    const scale100 = layerSize / 100;
-    ctx.save();
-    ctx.translate(layerOffset, layerOffset);
-    ctx.scale(scale100, scale100);
+    if (sections.length === 0) return html``;
 
     const cx       = 50;
     const cy       = 50;
@@ -450,44 +404,65 @@ class ChronoGaugeCard extends LitElement {
     // Sort sections by value ascending
     const sorted = [...sections].sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
 
-    sorted.forEach((sec, i) => {
-      const secStart    = parseFloat(sec.value);
-      const secEnd      = i < sorted.length - 1
-        ? parseFloat(sorted[i + 1].value)
-        : scaleMax;
+    return html`
+      <div class="gauge-scale-layer">
+        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs>
+            ${sorted.map((sec, i) => {
+              const secStart    = parseFloat(sec.value);
+              const secEnd      = i < sorted.length - 1
+                ? parseFloat(sorted[i + 1].value)
+                : scaleMax;
+              const angleStart  = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
+              const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+              const strokeWidth = parseFloat(sec.width)    || 16;
+              const position    = parseFloat(sec.position) || 0;
+              const r           = (50 + position) - strokeWidth / 2;
+              const arcPath     = buildArcPath(angleStart, angleEnd, r, cx, cy);
+              const clipId      = `section-clip-${si}-${i}`;
+              return svg`
+                <clipPath id="${clipId}" clipPathUnits="userSpaceOnUse">
+                  <path
+                    d="${arcPath}"
+                    fill="none"
+                    stroke="white"
+                    stroke-width="${strokeWidth}"
+                    stroke-linecap="${sec.linecap || 'butt'}"
+                  />
+                </clipPath>
+              `;
+            })}
+          </defs>
 
-      const angleStart  = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
-      const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+          ${sorted.map((sec, i) => {
+            const secStart    = parseFloat(sec.value);
+            const secEnd      = i < sorted.length - 1
+              ? parseFloat(sorted[i + 1].value)
+              : scaleMax;
+            const angleStart  = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
+            const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+            const clipId      = `section-clip-${si}-${i}`;
 
-      const strokeWidth = parseFloat(sec.width)    || 16;
-      const position    = parseFloat(sec.position) || 0;
-      // Inward-only: draw at r - strokeWidth/2 so outer edge sits at r
-      const r           = (50 + position) - strokeWidth / 2;
+            // CSS conic-gradient: starts from north (-90deg in CSS = 0° compass).
+            // angleStart and angleEnd are compass degrees — convert to CSS degrees
+            // by subtracting 90.
+            const cssStart    = angleStart - 90;
+            const cssEnd      = angleEnd   - 90;
 
-      // Convert compass degrees to canvas radians (0=east, clockwise)
-      const canvasStart = (angleStart - 90) * Math.PI / 180;
-      const canvasEnd   = (angleEnd   - 90) * Math.PI / 180;
-
-      // Conic gradient centered at (cx, cy), starting at the arc start angle
-      const gradient = ctx.createConicGradient(canvasStart, cx, cy);
-
-      // The gradient spans the full circle (0 to 2π).
-      // We want color_start at canvasStart and color_end at canvasEnd.
-      const arcSpan  = ((angleEnd - angleStart) + 360) % 360;
-      const fraction = arcSpan / 360;
-      gradient.addColorStop(0,        sec.color_start || '#ffffff');
-      gradient.addColorStop(fraction, sec.color_end   || sec.color_start || '#ffffff');
-      if (fraction < 1) gradient.addColorStop(1, sec.color_end || sec.color_start || '#ffffff');
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, canvasStart, canvasEnd, false);
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth   = strokeWidth;
-      ctx.lineCap     = sec.linecap || 'butt';
-      ctx.stroke();
-    });
-
-    ctx.restore();
+            return svg`
+              <g clip-path="url(#${clipId})">
+                <foreignObject x="0" y="0" width="100" height="100">
+                  <div
+                    xmlns="http://www.w3.org/1999/xhtml"
+                    style="width:100%;height:100%;background:conic-gradient(from ${cssStart}deg at 50% 50%, ${sec.color_start || '#ffffff'} 0deg, ${sec.color_end || sec.color_start || '#ffffff'} ${cssEnd - cssStart}deg);"
+                  ></div>
+                </foreignObject>
+              </g>
+            `;
+          })}
+        </svg>
+      </div>
+    `;
   }
 
   _buildNeedlePath(morph, curve, invert, position, width, height) {
@@ -643,9 +618,10 @@ class ChronoGaugeCard extends LitElement {
               })}
             </div>
 
-            ${(c.scales || []).map((scale, si) =>
-              this._renderScaleArc(scale, si)
-            )}
+            ${(c.scales || []).map((scale, si) => html`
+              ${this._renderScaleArc(scale, si)}
+              ${this._renderScaleSections(scale, si)}
+            `)}
 
             <div class="gauge-global-rotate-group"
                  style="transform:rotate(${c.arc_rotation}deg)">
@@ -658,10 +634,6 @@ class ChronoGaugeCard extends LitElement {
             </div>
 
           </div>
-
-          ${(c.scales || []).map((scale, si) =>
-            this._renderScaleSections(scale, si)
-          )}
 
           ${c.footer_show ? html`
             <div class="card-footer-text"
@@ -782,13 +754,6 @@ class ChronoGaugeCard extends LitElement {
       width: 100%;
       height: 100%;
       overflow: visible;
-    }
-
-    .gauge-sections-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      pointer-events: none;
     }
 
     .gauge-needle-layer {
