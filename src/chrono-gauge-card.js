@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.8';
+const CARD_VERSION = '1.0.9';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.9: Add needle rendering — _buildNeedlePath, _renderScaleOverlay with per-needle
+//         SVG; value clamped, converted via valueToAngle; gradient support
 // v1.0.8: Add sections rendering — sorted arc bands per scale, each with own
 //         color, width, position; last section extends to scale_max
 // v1.0.7: Add arc_color, arc_width, arc_linecap to DEFAULT_SCALE; use in _renderScaleArc
@@ -412,9 +414,108 @@ class ChronoGaugeCard extends LitElement {
     `;
   }
 
+  _buildNeedlePath(morph, curve, invert, position, width, height) {
+    const hw = width / 2;
+    let points = [
+      { x: 50,      y: 0              },  // P1: tip
+      { x: 50 - hw, y: height         },  // P2: base left
+      { x: 50,      y: height + morph },  // P3: tail
+      { x: 50 + hw, y: height         },  // P4: base right
+    ];
+
+    const curveNormalized = (curve / 50) * 0.5523;
+    const cHoriz = curveNormalized * hw;
+    const cUp    = curveNormalized * height;
+    const cDown  = curveNormalized * morph;
+
+    let controlDirections = [
+      { in: { x:  1, y:  0 }, out: { x: -1, y:  0 }, inDist: cHoriz, outDist: cHoriz },
+      { in: { x:  0, y: -1 }, out: { x:  0, y:  1 }, inDist: cUp,    outDist: cDown  },
+      { in: { x: -1, y:  0 }, out: { x:  1, y:  0 }, inDist: cHoriz, outDist: cHoriz },
+      { in: { x:  0, y:  1 }, out: { x:  0, y: -1 }, inDist: cDown,  outDist: cUp    },
+    ];
+
+    if (invert) {
+      points.forEach(p => { p.y = height - p.y; });
+      controlDirections.forEach(d => {
+        d.in.y  = -d.in.y;
+        d.out.y = -d.out.y;
+      });
+    }
+
+    points.forEach(p => { p.y += (50 - height) - position; });
+
+    const controls = points.map((p, i) => ({
+      in:  { x: p.x + controlDirections[i].in.x  * controlDirections[i].inDist,
+             y: p.y + controlDirections[i].in.y  * controlDirections[i].inDist  },
+      out: { x: p.x + controlDirections[i].out.x * controlDirections[i].outDist,
+             y: p.y + controlDirections[i].out.y * controlDirections[i].outDist },
+    }));
+
+    let path = `M ${points[0].x},${points[0].y}`;
+    for (let i = 0; i < points.length; i++) {
+      const next = (i + 1) % points.length;
+      path += ` C ${controls[i].out.x},${controls[i].out.y} ${controls[next].in.x},${controls[next].in.y} ${points[next].x},${points[next].y}`;
+    }
+    path += ' Z';
+    return path;
+  }
+
   _renderScaleOverlay(scale, si) {
-    // Ticks and needles will be rendered here — empty for now
-    return html``;
+    const scaleMin   = parseFloat(scale.scale_min) ?? 0;
+    const scaleMax   = parseFloat(scale.scale_max) ?? 100;
+    const clampMin   = scaleMin - (parseFloat(scale.clamp_min_offset) ?? 0);
+    const clampMax   = scaleMax + (parseFloat(scale.clamp_max_offset) ?? 0);
+    const { arcStart, arcEnd } = cgGapToArc(
+      parseFloat(scale.gap_position) ?? 0,
+      parseFloat(scale.gap_size)     ?? 180
+    );
+
+    return html`
+      ${(scale.needles || []).map((needle, ni) => {
+        if (!needle.show) return html``;
+        const rawValue = this._needleValues?.[si]?.[ni];
+        if (rawValue === undefined) return html``;
+
+        // Clamp value to effective range
+        const clampedValue = Math.min(Math.max(rawValue, clampMin), clampMax);
+
+        // Convert to rotation angle
+        const angle  = valueToAngle(clampedValue, scaleMin, scaleMax, arcStart, arcEnd);
+
+        const path   = this._buildNeedlePath(
+          parseFloat(needle.morph),
+          parseFloat(needle.curve),
+          needle.invert,
+          parseFloat(needle.position),
+          parseFloat(needle.width),
+          parseFloat(needle.height)
+        );
+        const gradId = `needleGradient-${si}-${ni}`;
+        const g1     = needle.invert ? needle.color_2 : needle.color_1;
+        const g1pos  = needle.invert ? 100 - parseFloat(needle.color_2_pos) : parseFloat(needle.color_1_pos);
+        const g2     = needle.invert ? needle.color_1 : needle.color_2;
+        const g2pos  = needle.invert ? 100 - parseFloat(needle.color_1_pos) : parseFloat(needle.color_2_pos);
+
+        return html`
+          <div class="gauge-needle-layer" style="transform:rotate(${angle}deg)">
+            <svg class="gauge-needle-svg"
+                 viewBox="0 0 100 100"
+                 preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"        stop-color="${g1}" />
+                  <stop offset="${g1pos}%" stop-color="${g1}" />
+                  <stop offset="${g2pos}%" stop-color="${g2}" />
+                  <stop offset="100%"      stop-color="${g2}" />
+                </linearGradient>
+              </defs>
+              <path d="${path}" fill="url(#${gradId})" />
+            </svg>
+          </div>
+        `;
+      })}
+    `;
   }
 
   render() {
@@ -600,6 +701,22 @@ class ChronoGaugeCard extends LitElement {
     }
 
     .gauge-scale-svg {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .gauge-needle-layer {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .gauge-needle-svg {
       position: absolute;
       width: 100%;
       height: 100%;
