@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.13';
+const CARD_VERSION = '1.0.14';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.14: Move section canvases to gauge-container as direct siblings of gauge-layer —
+//          no offset needed, canvas naturally covers full container
 // v1.0.13: Size canvas to gauge-container to allow sections to extend beyond gauge-layer;
 //          center canvas over gauge-layer center; gauge-scale-layer overflow:visible
 // v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
@@ -389,16 +391,10 @@ class ChronoGaugeCard extends LitElement {
   }
 
   _renderScaleSections(scale, si) {
-    // Canvas is sized to gauge-container and offset negatively to compensate
-    // for gauge-layer inset — allows sections to render beyond gauge-layer bounds.
+    // Canvas is rendered as a direct child of gauge-container (sibling of gauge-layer)
+    // so it naturally covers the full container with no offset needed.
     return html`
-      <div class="gauge-scale-layer">
-        <canvas class="gauge-sections-canvas"
-                id="gauge-sections-canvas-${si}"
-                style="top: calc(-1 * var(--cg-gauge-margin, 12%));
-                       left: calc(-1 * var(--cg-gauge-margin, 12%));">
-        </canvas>
-      </div>
+      <canvas class="gauge-sections-canvas" id="gauge-sections-canvas-${si}"></canvas>
     `;
   }
 
@@ -647,10 +643,9 @@ class ChronoGaugeCard extends LitElement {
               })}
             </div>
 
-            ${(c.scales || []).map((scale, si) => html`
-              ${this._renderScaleArc(scale, si)}
-              ${this._renderScaleSections(scale, si)}
-            `)}
+            ${(c.scales || []).map((scale, si) =>
+              this._renderScaleArc(scale, si)
+            )}
 
             <div class="gauge-global-rotate-group"
                  style="transform:rotate(${c.arc_rotation}deg)">
@@ -663,6 +658,10 @@ class ChronoGaugeCard extends LitElement {
             </div>
 
           </div>
+
+          ${(c.scales || []).map((scale, si) =>
+            this._renderScaleSections(scale, si)
+          )}
 
           ${c.footer_show ? html`
             <div class="card-footer-text"
