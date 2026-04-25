@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.23.1';
+const CARD_VERSION = '1.0.23.2';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.23: Compute gauge bounding box from arc geometry; apply as aspect-ratio to gauge-layer
@@ -853,6 +853,8 @@ class ChronoGaugeCard extends LitElement {
       position: relative;
       width: 100%;
       height: 100%;
+      min-height: 100%;
+      aspect-ratio: var(--cg-gauge-aspect-ratio);
       margin: 0 auto;
       overflow: hidden;
       box-sizing: border-box;
