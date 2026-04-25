@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.11';
+const CARD_VERSION = '1.0.12';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
+//          true along-arc color gradients; _drawAllSections called after setConfig
 // v1.0.11: Move arc sections SVG out of gauge-bezel-layer to sibling position —
 //          sections now render freely outside circle; overflow:hidden stays on bezel
 // v1.0.10: Deep-merge scales/needles/sections/ticks/fields with defaults in setConfig
@@ -254,6 +256,9 @@ class ChronoGaugeCard extends LitElement {
     if (this._hass && !this._subscriptionsActive) {
       this._setupSubscriptions();
     }
+
+    // Redraw canvas sections after DOM updates
+    this.updateComplete.then(() => this._drawAllSections());
   }
 
   get config() {
@@ -382,53 +387,91 @@ class ChronoGaugeCard extends LitElement {
   }
 
   _renderScaleSections(scale, si) {
-    const sections = (scale.sections || []);
-    if (sections.length === 0) return html``;
+    // Canvas element — sections are drawn in _drawScaleSections via Canvas 2D API
+    // using createConicGradient for true along-arc color gradients.
+    return html`
+      <div class="gauge-scale-layer">
+        <canvas class="gauge-sections-canvas" id="gauge-sections-canvas-${si}"></canvas>
+      </div>
+    `;
+  }
+
+  _drawAllSections() {
+    const c = this.config;
+    if (!c) return;
+    (c.scales || []).forEach((scale, si) => {
+      const canvas = this.shadowRoot?.querySelector(`#gauge-sections-canvas-${si}`);
+      if (canvas) this._drawScaleSections(canvas, scale);
+    });
+  }
+
+  _drawScaleSections(canvas, scale) {
+    const sections = scale.sections || [];
+    if (sections.length === 0) return;
+
+    // Size canvas to match its rendered size for correct pixel density
+    const size    = canvas.offsetWidth;
+    if (!size) return;
+    canvas.width  = size;
+    canvas.height = size;
+
+    const ctx      = canvas.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+
+    // Scale context so we can work in 100×100 coordinate space
+    const scale100 = size / 100;
+    ctx.scale(scale100, scale100);
 
     const cx       = 50;
     const cy       = 50;
-    const scaleMin = parseFloat(scale.scale_min) ?? 0;
-    const scaleMax = parseFloat(scale.scale_max) ?? 100;
+    const scaleMin = parseFloat(scale.scale_min) || 0;
+    const scaleMax = parseFloat(scale.scale_max) || 100;
     const { arcStart, arcEnd } = cgGapToArc(
-      parseFloat(scale.gap_position) ?? 0,
-      parseFloat(scale.gap_size)     ?? 180
+      parseFloat(scale.gap_position) || 0,
+      parseFloat(scale.gap_size)     || 180
     );
 
     // Sort sections by value ascending
     const sorted = [...sections].sort((a, b) => parseFloat(a.value) - parseFloat(b.value));
 
-    const paths = sorted.map((sec, i) => {
-      const secStart  = parseFloat(sec.value);
-      const secEnd    = i < sorted.length - 1
+    sorted.forEach((sec, i) => {
+      const secStart    = parseFloat(sec.value);
+      const secEnd      = i < sorted.length - 1
         ? parseFloat(sorted[i + 1].value)
         : scaleMax;
 
-      const angleStart = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
-      const angleEnd   = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
+      const angleStart  = valueToAngle(secStart, scaleMin, scaleMax, arcStart, arcEnd);
+      const angleEnd    = valueToAngle(secEnd,   scaleMin, scaleMax, arcStart, arcEnd);
 
-      const strokeWidth = parseFloat(sec.width)    ?? 16;
-      const position    = parseFloat(sec.position) ?? 0;
+      const strokeWidth = parseFloat(sec.width)    || 16;
+      const position    = parseFloat(sec.position) || 0;
+      // Inward-only: draw at r - strokeWidth/2 so outer edge sits at r
       const r           = (50 + position) - strokeWidth / 2;
-      const arcPath     = buildArcPath(angleStart, angleEnd, r, cx, cy);
 
-      return { arcPath, strokeWidth, color: sec.color_start || '#ffffff', linecap: sec.linecap || 'butt' };
+      // Convert compass degrees to canvas radians (0=east, clockwise)
+      const canvasStart = (angleStart - 90) * Math.PI / 180;
+      const canvasEnd   = (angleEnd   - 90) * Math.PI / 180;
+
+      // Conic gradient centered at (cx, cy), starting at the arc start angle
+      const gradient = ctx.createConicGradient(canvasStart, cx, cy);
+
+      // The gradient spans the full circle (0 to 2π).
+      // We want color_start at canvasStart and color_end at canvasEnd.
+      // Compute the fraction of the full circle this section occupies.
+      const arcSpan     = ((angleEnd - angleStart) + 360) % 360;
+      const fraction    = arcSpan / 360;
+      gradient.addColorStop(0,        sec.color_start || '#ffffff');
+      gradient.addColorStop(fraction, sec.color_end   || sec.color_start || '#ffffff');
+      // Fill remainder with color_end to avoid wrap-around artifact
+      if (fraction < 1) gradient.addColorStop(1, sec.color_end || sec.color_start || '#ffffff');
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, canvasStart, canvasEnd, false);
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth   = strokeWidth;
+      ctx.lineCap     = sec.linecap || 'butt';
+      ctx.stroke();
     });
-
-    return html`
-      <div class="gauge-scale-layer">
-        <svg class="gauge-scale-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-          ${paths.map(p => svg`
-            <path
-              d="${p.arcPath}"
-              fill="none"
-              stroke="${p.color}"
-              stroke-width="${p.strokeWidth}"
-              stroke-linecap="${p.linecap}"
-            />
-          `)}
-        </svg>
-      </div>
-    `;
   }
 
   _buildNeedlePath(morph, curve, invert, position, width, height) {
@@ -719,6 +762,12 @@ class ChronoGaugeCard extends LitElement {
       width: 100%;
       height: 100%;
       overflow: visible;
+    }
+
+    .gauge-sections-canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
     }
 
     .gauge-needle-layer {
