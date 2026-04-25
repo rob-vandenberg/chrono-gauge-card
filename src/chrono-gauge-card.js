@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.9';
+const CARD_VERSION = '1.0.10';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.10: Deep-merge scales/needles/sections/ticks/fields with defaults in setConfig
+//          — fixes NaN angles caused by missing properties not in user YAML
 // v1.0.9: Add needle rendering — _buildNeedlePath, _renderScaleOverlay with per-needle
 //         SVG; value clamped, converted via valueToAngle; gradient support
 // v1.0.8: Add sections rendering — sorted arc bands per scale, each with own
@@ -223,6 +225,19 @@ class ChronoGaugeCard extends LitElement {
 
   setConfig(config) {
     this._config = { ...DEFAULT_CONFIG, ...config };
+
+    // Deep-merge nested arrays with their defaults so every property is always defined.
+    // A shallow spread of config only replaces top-level keys — nested objects inside
+    // scales[], needles[], sections[], ticks[] and fields[] would be missing any
+    // property the user did not specify in YAML, causing NaN in calculations.
+    this._config.scales = (config.scales || [{ ...DEFAULT_SCALE }]).map(s => ({
+      ...DEFAULT_SCALE,
+      ...s,
+      sections: (s.sections || []).map(sec => ({ ...DEFAULT_SECTION, ...sec })),
+      ticks:    (s.ticks    || []).map(t   => ({ ...DEFAULT_TICK,    ...t   })),
+      needles:  (s.needles  || []).map(n   => ({ ...DEFAULT_NEEDLE,  ...n   })),
+    }));
+    this._config.fields = (config.fields || []).map(f => ({ ...DEFAULT_FIELD, ...f }));
 
     // Set all CSS custom properties once — browser handles all resizing from here
     const c            = this._config;
