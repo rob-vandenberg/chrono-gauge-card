@@ -1,7 +1,8 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.22';
+const CARD_VERSION = '1.0.23';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.23: Compute gauge bounding box from arc geometry; apply as aspect-ratio to gauge-layer
 // v1.0.22: Add tick rendering — line and number types, exclusive collision logic, per-scale
 // v1.0.21: Fix geometry — remove aspect-ratio from gauge-container, add to gauge-layer (reverted in v1.0.22)
 // v1.0.20: Expand foreignObject to gauge-layer + GAUGE_DEFAULT_MARGIN so gradient covers full card area
@@ -219,6 +220,57 @@ function buildRingPath(arcStart, arcEnd, rOuter, rInner, cx, cy) {
   return `M ${p1.x},${p1.y} A ${rOuter},${rOuter} 0 ${largeArc} 1 ${p2.x},${p2.y} L ${p3.x},${p3.y} A ${rInner},${rInner} 0 ${largeArc} 0 ${p4.x},${p4.y} Z`;
 }
 
+// ─── cgArcMidpoint ────────────────────────────────────────────────────────────
+// Returns the compass angle of the midpoint of an arc from arcStart to arcEnd.
+// Handles wrap-around correctly (e.g. arcStart=350, arcEnd=10 → midpoint=0).
+function cgArcMidpoint(arcStart, arcEnd) {
+  const arcSpan = ((arcEnd - arcStart) + 360) % 360;
+  return (arcStart + arcSpan / 2) % 360;
+}
+
+// ─── cgScaleBoundingPoints ────────────────────────────────────────────────────
+// Returns the 4 bounding points of a single scale's arc shape:
+// center, arcStart point, arc midpoint, arcEnd point — all in 100×100 space.
+// Folds globalRotation + scale.arc_rotation into the arc angles.
+function cgScaleBoundingPoints(scale, globalRotation) {
+  const { arcStart: rawStart, arcEnd: rawEnd } = cgGapToArc(
+    parseFloat(scale.gap_position) || 0,
+    parseFloat(scale.gap_size)     || 0
+  );
+  const totalRotation = ((parseFloat(globalRotation) || 0) + (parseFloat(scale.arc_rotation) || 0));
+  const arcStart = (rawStart + totalRotation + 360) % 360;
+  const arcEnd   = (rawEnd   + totalRotation + 360) % 360;
+  const arcMid   = cgArcMidpoint(arcStart, arcEnd);
+  return [
+    { x: 50, y: 50 },
+    angleToPoint(arcStart, 50, 50, 50),
+    angleToPoint(arcMid,   50, 50, 50),
+    angleToPoint(arcEnd,   50, 50, 50),
+  ];
+}
+
+// ─── cgGaugeBoundingBox ───────────────────────────────────────────────────────
+// Computes the axis-aligned bounding box of the entire gauge by iterating all
+// scales and expanding minX/maxX/minY/maxY with each scale's bounding points.
+// Starting values are (50,50) — the center — which is always a valid point.
+// Returns { minX, maxX, minY, maxY, aspectRatio }.
+function cgGaugeBoundingBox(config) {
+  let minX = 50, maxX = 50, minY = 50, maxY = 50;
+  const globalRotation = parseFloat(config.arc_rotation) || 0;
+  (config.scales || []).forEach(scale => {
+    cgScaleBoundingPoints(scale, globalRotation).forEach(pt => {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+    });
+  });
+  const width       = maxX - minX;
+  const height      = maxY - minY;
+  const aspectRatio = width > 0 && height > 0 ? width / height : 1;
+  return { minX, maxX, minY, maxY, aspectRatio };
+}
+
 // ─── Main Card ────────────────────────────────────────────────────────────────
 class ChronoGaugeCard extends LitElement {
   static properties = {
@@ -272,12 +324,14 @@ class ChronoGaugeCard extends LitElement {
     // Set all CSS custom properties once — browser handles all resizing from here
     const c            = this._config;
     const gaugeMargin  = (100 + GAUGE_DEFAULT_MARGIN) - (parseFloat(c.gauge_size) ?? 100);
-    this.style.setProperty('--cg-gauge-margin',       `${gaugeMargin}%`);
-    this.style.setProperty('--cg-bezel-width',        `${parseFloat(c.bezel_width) / 2}cqi`);
-    this.style.setProperty('--cg-bezel-color',         c.bezel_color);
-    this.style.setProperty('--cg-background-color',    c.background_color);
-    this.style.setProperty('--cg-bezel-radius',        GAUGE_BEZEL_RADIUS);
-    this.style.setProperty('--cg-animation-duration', `${c.rotation_animation_time}s`);
+    const { aspectRatio } = cgGaugeBoundingBox(this._config);
+    this.style.setProperty('--cg-gauge-margin',        `${gaugeMargin}%`);
+    this.style.setProperty('--cg-gauge-aspect-ratio',  `${aspectRatio}`);
+    this.style.setProperty('--cg-bezel-width',         `${parseFloat(c.bezel_width) / 2}cqi`);
+    this.style.setProperty('--cg-bezel-color',          c.bezel_color);
+    this.style.setProperty('--cg-background-color',     c.background_color);
+    this.style.setProperty('--cg-bezel-radius',         GAUGE_BEZEL_RADIUS);
+    this.style.setProperty('--cg-animation-duration',  `${c.rotation_animation_time}s`);
 
     if (this._hass && !this._subscriptionsActive) {
       this._setupSubscriptions();
@@ -811,6 +865,7 @@ class ChronoGaugeCard extends LitElement {
       left:   var(--cg-gauge-margin, 12%);
       right:  var(--cg-gauge-margin, 12%);
       bottom: var(--cg-gauge-margin, 12%);
+      aspect-ratio: var(--cg-gauge-aspect-ratio, 1);
       overflow: visible;
     }
 
