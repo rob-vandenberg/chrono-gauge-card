@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.23.2';
+const CARD_VERSION = '1.0.23.3';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.23: Compute gauge bounding box from arc geometry; apply as aspect-ratio to gauge-layer
@@ -332,6 +332,11 @@ class ChronoGaugeCard extends LitElement {
     this.style.setProperty('--cg-background-color',     c.background_color);
     this.style.setProperty('--cg-bezel-radius',         GAUGE_BEZEL_RADIUS);
     this.style.setProperty('--cg-animation-duration',  `${c.rotation_animation_time}s`);
+
+    // Apply card_height to host element if specified — lets user control ha-card height
+    if (c.card_height) {
+      this.style.height = c.card_height;
+    }
 
     if (this._hass && !this._subscriptionsActive) {
       this._setupSubscriptions();
@@ -818,6 +823,10 @@ class ChronoGaugeCard extends LitElement {
   }
 
   static styles = css`
+    :host {
+      display: block;
+    }
+
     ha-card {
       padding: 0;
       display: flex;
