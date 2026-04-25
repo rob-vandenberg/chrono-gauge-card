@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.17.2';
+const CARD_VERSION = '1.0.17.3';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.17: Fix section gradient angles (+90 compass→CSS) and re-apply clipPath to foreignObject
@@ -466,7 +466,7 @@ class ChronoGaugeCard extends LitElement {
             }
 
             // Gradient — no clip for testing; from clause keeps stops ascending across wrap-around
-            const cssStart = angleStart + 90;
+            const cssStart = angleStart;
             const cssSpan  = ((angleEnd - angleStart) + 360) % 360;
             return svg`
               <foreignObject x="0" y="0" width="100" height="100">
