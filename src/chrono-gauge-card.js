@@ -1,7 +1,9 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.12.1';
+const CARD_VERSION = '1.0.13';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
+// v1.0.13: Size canvas to gauge-container to allow sections to extend beyond gauge-layer;
+//          center canvas over gauge-layer center; gauge-scale-layer overflow:visible
 // v1.0.12: Replace SVG sections with Canvas 2D — use createConicGradient for
 //          true along-arc color gradients; _drawAllSections called after setConfig
 // v1.0.11: Move arc sections SVG out of gauge-bezel-layer to sibling position —
@@ -387,11 +389,15 @@ class ChronoGaugeCard extends LitElement {
   }
 
   _renderScaleSections(scale, si) {
-    // Canvas element — sections are drawn in _drawScaleSections via Canvas 2D API
-    // using createConicGradient for true along-arc color gradients.
+    // Canvas is sized to gauge-container and offset negatively to compensate
+    // for gauge-layer inset — allows sections to render beyond gauge-layer bounds.
     return html`
       <div class="gauge-scale-layer">
-        <canvas class="gauge-sections-canvas" id="gauge-sections-canvas-${si}"></canvas>
+        <canvas class="gauge-sections-canvas"
+                id="gauge-sections-canvas-${si}"
+                style="top: calc(-1 * var(--cg-gauge-margin, 12%));
+                       left: calc(-1 * var(--cg-gauge-margin, 12%));">
+        </canvas>
       </div>
     `;
   }
@@ -409,17 +415,31 @@ class ChronoGaugeCard extends LitElement {
     const sections = scale.sections || [];
     if (sections.length === 0) return;
 
-    // Size canvas to match its rendered size for correct pixel density
-    const size    = canvas.offsetWidth;
-    if (!size) return;
-    canvas.width  = size;
-    canvas.height = size;
+    // Size canvas to gauge-container so sections can render beyond gauge-layer bounds.
+    // gauge-container is overflow:hidden — the only intended clip boundary.
+    const container = this.shadowRoot?.querySelector('.gauge-container');
+    if (!container) return;
+    const containerSize = container.offsetWidth;
+    if (!containerSize) return;
 
-    const ctx      = canvas.getContext('2d');
-    ctx.clearRect(0, 0, size, size);
+    canvas.width  = containerSize;
+    canvas.height = containerSize;
 
-    // Scale context so we can work in 100×100 coordinate space
-    const scale100 = size / 100;
+    // gauge-layer is inset by --cg-gauge-margin on all sides.
+    // The canvas covers the full container, so we must offset the drawing origin
+    // to align the 100×100 coordinate space center with the gauge-layer center.
+    const gaugeLayer = this.shadowRoot?.querySelector('.gauge-layer');
+    if (!gaugeLayer) return;
+    const layerSize   = gaugeLayer.offsetWidth;
+    const layerOffset = (containerSize - layerSize) / 2;
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, containerSize, containerSize);
+
+    // Translate to gauge-layer origin, then scale to 100×100 coordinate space
+    const scale100 = layerSize / 100;
+    ctx.save();
+    ctx.translate(layerOffset, layerOffset);
     ctx.scale(scale100, scale100);
 
     const cx       = 50;
@@ -457,12 +477,10 @@ class ChronoGaugeCard extends LitElement {
 
       // The gradient spans the full circle (0 to 2π).
       // We want color_start at canvasStart and color_end at canvasEnd.
-      // Compute the fraction of the full circle this section occupies.
-      const arcSpan     = ((angleEnd - angleStart) + 360) % 360;
-      const fraction    = arcSpan / 360;
+      const arcSpan  = ((angleEnd - angleStart) + 360) % 360;
+      const fraction = arcSpan / 360;
       gradient.addColorStop(0,        sec.color_start || '#ffffff');
       gradient.addColorStop(fraction, sec.color_end   || sec.color_start || '#ffffff');
-      // Fill remainder with color_end to avoid wrap-around artifact
       if (fraction < 1) gradient.addColorStop(1, sec.color_end || sec.color_start || '#ffffff');
 
       ctx.beginPath();
@@ -472,6 +490,8 @@ class ChronoGaugeCard extends LitElement {
       ctx.lineCap     = sec.linecap || 'butt';
       ctx.stroke();
     });
+
+    ctx.restore();
   }
 
   _buildNeedlePath(morph, curve, invert, position, width, height) {
@@ -755,6 +775,7 @@ class ChronoGaugeCard extends LitElement {
       justify-content: center;
       align-items: center;
       pointer-events: none;
+      overflow: visible;
     }
 
     .gauge-scale-svg {
@@ -766,9 +787,9 @@ class ChronoGaugeCard extends LitElement {
 
     .gauge-sections-canvas {
       position: absolute;
-      width: 100%;
-      height: 100%;
-      overflow: visible;
+      top: 0;
+      left: 0;
+      pointer-events: none;
     }
 
     .gauge-needle-layer {
