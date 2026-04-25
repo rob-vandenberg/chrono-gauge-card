@@ -1,5 +1,5 @@
 // ─── Card Version ─────────────────────────────────────────────────────────────
-const CARD_VERSION = '1.0.17';
+const CARD_VERSION = '1.0.17.1';
 
 // ─── Card Version History ─────────────────────────────────────────────────────
 // v1.0.17: Fix section gradient angles (+90 compass→CSS) and re-apply clipPath to foreignObject
@@ -465,9 +465,9 @@ class ChronoGaugeCard extends LitElement {
               return svg`<path d="${ringPath}" fill="${colorStart}" />`;
             }
 
-            // Gradient — clip to ring segment, correct compass→CSS angle offset (+90)
+            // Gradient — no clip for testing, correct compass→CSS angle offset (+90)
             return svg`
-              <foreignObject x="0" y="0" width="100" height="100" clip-path="url(#${clipId})">
+              <foreignObject x="0" y="0" width="100" height="100">
                 <div
                   xmlns="http://www.w3.org/1999/xhtml"
                   style="width:100%;height:100%;background:conic-gradient(transparent ${angleStart + 90}deg, ${colorStart} ${angleStart + 90}deg, ${colorEnd} ${angleEnd + 90}deg, transparent ${angleEnd + 90}deg);"
